@@ -11,6 +11,7 @@ permissions:
 jobs:
   create-packages:
     strategy:
+      fail-fast: false
       matrix:
         # this fork only ships android (built on ubuntu) and windows
         os: [ "ubuntu-latest", "windows-2022" ]
@@ -95,7 +96,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
-          ./gradlew android:app:testReleaseUnitTest
+          ./gradlew android:app:testDebugUnitTest
 
   release:
     # manual runs only produce the artifacts
