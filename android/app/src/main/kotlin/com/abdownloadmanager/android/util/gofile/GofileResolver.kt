@@ -2,6 +2,7 @@ package com.abdownloadmanager.android.util.gofile
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -17,6 +18,13 @@ import okhttp3.Request
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration.Companion.seconds
 
+class GofileResult(
+    // direct links with the cookie that gofile requires
+    val files: List<HttpDownloadCredentials>,
+    // files that gofile doesn't serve to free accounts at the moment
+    val unavailableCount: Int,
+)
+
 /**
  * gofile signs its api requests with a script that changes often,
  * so we let the page do its own request in a hidden webview and repeat that request for each page of the folder
@@ -24,22 +32,25 @@ import kotlin.time.Duration.Companion.seconds
  */
 object GofileResolver {
     private const val CONTENTS_API = "https://api.gofile.io/contents/"
+    private const val SITE = "https://gofile.io"
+    private val tokenInCookie = Regex("""accountToken=([A-Za-z0-9]+)""")
 
     // 100 files per page
     private const val MAX_PAGES = 50
 
     /**
-     * @return direct links of the files in this gofile link, or null if they can't be resolved
+     * @param pageLink see [gofilePageOf]
+     * @return the files of this gofile page, or null if they can't be resolved
      */
     @SuppressLint("SetJavaScriptEnabled")
     suspend fun resolve(
         context: Context,
-        link: String,
+        pageLink: String,
         client: OkHttpClient,
-    ): List<HttpDownloadCredentials>? {
+    ): GofileResult? {
         return withTimeoutOrNull(40.seconds) {
             withContext(Dispatchers.Main) {
-                val result = CompletableDeferred<List<HttpDownloadCredentials>?>()
+                val result = CompletableDeferred<GofileResult?>()
                 val handled = AtomicBoolean(false)
                 val webView = WebView(context)
                 try {
@@ -60,14 +71,14 @@ object GofileResolver {
                             ) {
                                 result.complete(
                                     runCatching {
-                                        fetchAllPages(client, url, request.requestHeaders, userAgent, link)
+                                        fetchAllPages(client, url, request.requestHeaders, userAgent, pageLink)
                                     }.onFailure { it.printStackTrace() }.getOrNull()
                                 )
                             }
                             return null
                         }
                     }
-                    webView.loadUrl(link)
+                    webView.loadUrl(pageLink)
                     result.await()
                 } finally {
                     webView.destroy()
@@ -82,12 +93,17 @@ object GofileResolver {
         headers: Map<String, String>,
         userAgent: String,
         pageLink: String,
-    ): List<HttpDownloadCredentials>? {
+    ): GofileResult? {
+        // the page sends the token of its account in this header, and keeps it in a cookie too
         val token = headers.entries
             .firstOrNull { it.key.equals("Authorization", true) }
-            ?.value?.removePrefix("Bearer")?.trim()
+            ?.value?.removePrefix("Bearer")?.trim()?.takeIf { it.isNotEmpty() }
+            ?: CookieManager.getInstance().getCookie(SITE)
+                ?.let { tokenInCookie.find(it) }
+                ?.groupValues?.get(1)
             ?: return null
         val files = mutableListOf<GofileFile>()
+        var unavailableCount = 0
         var page = 1
         while (true) {
             val request = Request.Builder()
@@ -97,6 +113,7 @@ object GofileResolver {
                         .build()
                 )
                 .header("User-Agent", userAgent)
+                .header("Authorization", "Bearer $token")
                 .apply {
                     headers.forEach { (name, value) ->
                         // let okhttp handle the compression
@@ -110,15 +127,20 @@ object GofileResolver {
             // a missing page must fail the whole thing instead of silently dropping files
             val parsed = parseGofileContents(body) ?: return null
             files += parsed.files
+            unavailableCount += parsed.unavailableCount
             if (page >= parsed.totalPages || page >= MAX_PAGES) break
             page++
         }
-        return files.map {
-            HttpDownloadCredentials(
-                link = it.link,
-                headers = mapOf("Cookie" to "accountToken=$token"),
-                downloadPage = pageLink,
-            )
-        }
+        return GofileResult(
+            files = files.map {
+                HttpDownloadCredentials(
+                    link = it.link,
+                    // gofile redirects to an html page without the cookie of an account that opened this page
+                    headers = mapOf("Cookie" to "accountToken=$token"),
+                    downloadPage = pageLink,
+                )
+            },
+            unavailableCount = unavailableCount,
+        )
     }
 }

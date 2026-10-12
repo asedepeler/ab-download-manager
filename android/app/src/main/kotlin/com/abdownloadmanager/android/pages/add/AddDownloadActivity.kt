@@ -12,7 +12,7 @@ import com.abdownloadmanager.android.pages.onboarding.permissions.PermissionMana
 import com.abdownloadmanager.android.ui.MainActivity
 import com.abdownloadmanager.android.util.activity.ABDMActivity
 import com.abdownloadmanager.android.util.gofile.GofileResolver
-import com.abdownloadmanager.android.util.gofile.isGofileContentLink
+import com.abdownloadmanager.android.util.gofile.gofilePageOf
 import com.abdownloadmanager.android.util.remote.PcRemote
 import com.abdownloadmanager.shared.pages.adddownload.AddDownloadConfig
 import com.abdownloadmanager.shared.pages.adddownload.AddDownloadCredentialsInUiProps
@@ -54,7 +54,7 @@ class AddDownloadActivity : ABDMActivity() {
         }
         val credentialsFromIntent = getDownloadCredentialsFromIntent(intent)
         scope.launch {
-            val credentials = resolveGofileLinks(credentialsFromIntent)
+            val credentials = resolveGofileLinks(credentialsFromIntent) ?: return@launch
             if (credentials.isNotEmpty() && pcRemote.isConfigured()) {
                 askWhereToDownload(credentials)
             } else {
@@ -72,24 +72,53 @@ class AddDownloadActivity : ABDMActivity() {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 
+    private fun showErrorAndFinish(message: String) {
+        AlertDialog.Builder(this)
+            .setTitle("Can't download from gofile")
+            .setMessage(message)
+            .setPositiveButton("OK") { _, _ -> finish() }
+            .setOnCancelListener { finish() }
+            .show()
+    }
+
     /**
-     * a gofile page link is replaced by the direct links of its files
+     * gofile links (a page, or a direct link of a file) are replaced by direct links that carry the cookie they need
+     * a gofile link is never passed as is, because gofile answers it with an html page
+     * @return null if a gofile link can't be downloaded, the reason is shown to the user
      */
-    private suspend fun resolveGofileLinks(credentials: List<IDownloadCredentials>): List<IDownloadCredentials> {
-        if (credentials.none { isGofileContentLink(it.link) }) {
+    private suspend fun resolveGofileLinks(credentials: List<IDownloadCredentials>): List<IDownloadCredentials>? {
+        if (credentials.none { gofilePageOf(it.link) != null }) {
             return credentials
         }
         toast("Reading gofile links...")
-        return credentials.flatMap {
-            if (!isGofileContentLink(it.link)) {
-                return@flatMap listOf(it)
+        var unavailableCount = 0
+        val resolved = credentials.flatMap {
+            val page = gofilePageOf(it.link) ?: return@flatMap listOf(it)
+            val result = GofileResolver.resolve(this, page, okHttpClient)
+            if (result == null) {
+                showErrorAndFinish(
+                    "Can't read $page. It may be removed, private or password protected, " +
+                            "or there is no internet connection."
+                )
+                return null
             }
-            val files = GofileResolver.resolve(this, it.link, okHttpClient)
-            if (files.isNullOrEmpty()) {
-                toast("Can't read this gofile link, open it in the browser")
-                listOf(it)
-            } else files
+            unavailableCount += result.unavailableCount
+            result.files
         }
+        if (resolved.isEmpty()) {
+            showErrorAndFinish(
+                if (unavailableCount > 0) {
+                    "gofile paused the free downloads of this file because its server is busy. Try again later."
+                } else {
+                    "No files found in this gofile link. Files inside sub folders are not supported."
+                }
+            )
+            return null
+        }
+        if (unavailableCount > 0) {
+            toast("$unavailableCount file(s) skipped, gofile paused their free downloads for now")
+        }
+        return resolved
     }
 
     private fun askWhereToDownload(credentials: List<IDownloadCredentials>) {
