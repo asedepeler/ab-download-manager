@@ -2,7 +2,9 @@ package com.abdownloadmanager.android.util.gofile
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class GofileContentsTest {
     @Test
@@ -74,6 +76,13 @@ class GofileContentsTest {
             page,
             gofilePageOf("https://store1.gofile.io/download/6fcdb3a1-2bf4-4d3d-8ee8-aa7fac399819/a.zip"),
         )
+    }
+
+    @Test
+    fun tellsDirectLinksFromPageLinks() {
+        assertTrue(isGofileFileLink("https://store1.gofile.io/download/web/6fcdb3a1-2bf4-4d3d-8ee8-aa7fac399819/a.mp4"))
+        assertFalse(isGofileFileLink("https://gofile.io/d/6fcdb3a1-2bf4-4d3d-8ee8-aa7fac399819"))
+        assertFalse(isGofileFileLink("https://gofile.io/d/AbC123"))
     }
 
     @Test

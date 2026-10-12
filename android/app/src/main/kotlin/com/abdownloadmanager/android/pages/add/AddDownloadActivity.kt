@@ -10,9 +10,11 @@ import com.abdownloadmanager.android.pages.add.multiple.AddMultiDownloadActivity
 import com.abdownloadmanager.android.pages.add.single.AddSingleDownloadActivity
 import com.abdownloadmanager.android.pages.onboarding.permissions.PermissionManager
 import com.abdownloadmanager.android.ui.MainActivity
+import com.abdownloadmanager.android.util.BrowserHeaders
 import com.abdownloadmanager.android.util.activity.ABDMActivity
 import com.abdownloadmanager.android.util.gofile.GofileResolver
 import com.abdownloadmanager.android.util.gofile.gofilePageOf
+import com.abdownloadmanager.android.util.gofile.isGofileFileLink
 import com.abdownloadmanager.android.util.remote.PcRemote
 import com.abdownloadmanager.shared.pages.adddownload.AddDownloadConfig
 import com.abdownloadmanager.shared.pages.adddownload.AddDownloadCredentialsInUiProps
@@ -54,7 +56,7 @@ class AddDownloadActivity : ABDMActivity() {
         }
         val credentialsFromIntent = getDownloadCredentialsFromIntent(intent)
         scope.launch {
-            val credentials = resolveGofileLinks(credentialsFromIntent) ?: return@launch
+            val credentials = prepareCredentials(credentialsFromIntent) ?: return@launch
             if (credentials.isNotEmpty() && pcRemote.isConfigured()) {
                 askWhereToDownload(credentials)
             } else {
@@ -82,19 +84,45 @@ class AddDownloadActivity : ABDMActivity() {
     }
 
     /**
-     * gofile links (a page, or a direct link of a file) are replaced by direct links that carry the cookie they need
+     * like the browser extension does, a link is sent with the cookies that the browser of this app has for it
+     */
+    private fun withBrowserCookies(credentials: IDownloadCredentials): IDownloadCredentials {
+        if (credentials !is HttpDownloadCredentials || credentials.headers != null) {
+            return credentials
+        }
+        val headers = BrowserHeaders.of(this, credentials.link) ?: return credentials
+        return credentials.copy(headers = headers)
+    }
+
+    /**
+     * adds the cookies that the links need
+     * gofile only serves a file to the browser that has opened its page, so that page is opened in the background first
      * a gofile link is never passed as is, because gofile answers it with an html page
      * @return null if a gofile link can't be downloaded, the reason is shown to the user
      */
-    private suspend fun resolveGofileLinks(credentials: List<IDownloadCredentials>): List<IDownloadCredentials>? {
+    private suspend fun prepareCredentials(credentials: List<IDownloadCredentials>): List<IDownloadCredentials>? {
         if (credentials.none { gofilePageOf(it.link) != null }) {
-            return credentials
+            return credentials.map(::withBrowserCookies)
         }
         toast("Reading gofile links...")
         var unavailableCount = 0
         val resolved = credentials.flatMap {
-            val page = gofilePageOf(it.link) ?: return@flatMap listOf(it)
-            val result = GofileResolver.resolve(this, page, okHttpClient)
+            val page = gofilePageOf(it.link) ?: return@flatMap listOf(withBrowserCookies(it))
+            if (isGofileFileLink(it.link)) {
+                val fileLink = it.link.trim()
+                val headers = GofileResolver.headersOfFile(this, fileLink, page, okHttpClient)
+                if (headers == null) {
+                    showErrorAndFinish(
+                        "gofile doesn't serve this file right now. Its server may be busy " +
+                                "(gofile pauses free downloads then), or the file was removed. Try again later."
+                    )
+                    return null
+                }
+                return@flatMap listOf(
+                    HttpDownloadCredentials(link = fileLink, headers = headers, downloadPage = page)
+                )
+            }
+            val result = GofileResolver.listFiles(this, page, okHttpClient)
             if (result == null) {
                 showErrorAndFinish(
                     "Can't read $page. It may be removed, private or password protected, " +

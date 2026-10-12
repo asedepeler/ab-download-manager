@@ -29,6 +29,13 @@ private val gofileFileLink = Regex(
 )
 
 /**
+ * @return true if it is a direct link of a single gofile file
+ */
+fun isGofileFileLink(link: String): Boolean {
+    return gofileFileLink.matches(link.trim())
+}
+
+/**
  * a direct link of a gofile file only works with the cookie of an account that has opened its page,
  * without it gofile redirects to an html page
  * @return the gofile page that lists the file(s) of this link, or null if it is not a gofile link
