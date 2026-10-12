@@ -17,6 +17,7 @@ import com.abdownloadmanager.shared.util.convertPositiveSpeedToHumanReadable
 import ir.amirab.downloader.downloaditem.IDownloadCredentials
 import ir.amirab.downloader.downloaditem.hls.HLSDownloadCredentials
 import ir.amirab.downloader.downloaditem.http.IHttpBasedDownloadCredentials
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -28,6 +29,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -57,6 +59,14 @@ data class PcDownload(
     val isFinished get() = status == "finished"
 }
 
+private class PcResponseException(
+    // null if the response is successful, but it is not what we expected
+    val code: Int?,
+) : IOException("HTTP $code")
+
+// default port of the integration server
+private const val DEFAULT_PORT = 15151
+
 /**
  * talks to the integration server of AB Download Manager running on a PC in the same network
  */
@@ -65,16 +75,26 @@ class PcRemote(
     baseClient: OkHttpClient,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
+    // an unreachable PC in the local network should fail fast
     private val client = baseClient.newBuilder()
-        .callTimeout(8, TimeUnit.SECONDS)
+        .connectTimeout(4, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .writeTimeout(10, TimeUnit.SECONDS)
         .build()
 
-    fun isConfigured() = appSettings.pcAddress.value.isNotBlank()
+    private fun address() = appSettings.pcAddress.value.trim().trimEnd('/')
+    fun isConfigured() = address().isNotEmpty()
     val isConfiguredFlow get() = appSettings.pcAddress.map { it.isNotBlank() }.distinctUntilChanged()
 
     private fun newRequest(path: String): Request.Builder {
-        val address = appSettings.pcAddress.value.trim().trimEnd('/')
-        val baseUrl = if ("://" in address) address else "http://$address"
+        val address = address()
+        require(address.isNotEmpty()) { "The address is empty" }
+        val withScheme = if ("://" in address) address else "http://$address"
+        val baseUrl = if (':' in withScheme.substringAfter("://")) {
+            withScheme
+        } else {
+            "$withScheme:$DEFAULT_PORT"
+        }
         return Request.Builder()
             .url(baseUrl + path)
             .apply {
@@ -87,9 +107,54 @@ class PcRemote(
     private suspend fun execute(request: Request): String = withContext(Dispatchers.IO) {
         client.newCall(request).execute().use {
             if (!it.isSuccessful) {
-                throw IOException("PC responded with HTTP ${it.code}")
+                throw PcResponseException(it.code)
             }
             it.body.string()
+        }
+    }
+
+    /**
+     * @return null if AB Download Manager on the PC answered and accepted the api key, otherwise the reason
+     */
+    suspend fun testConnection(): String? {
+        return try {
+            val answer = execute(newRequest("/ping").post("".toRequestBody()).build())
+            if (answer.trim() == "pong") null else describeError(PcResponseException(null))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            describeError(e)
+        }
+    }
+
+    /**
+     * explains to the user why a request to the PC failed and what to check
+     */
+    fun describeError(e: Throwable): String {
+        val address = address()
+        return when (e) {
+            is PcResponseException -> when (e.code) {
+                401, 403 -> "The PC refused the API key. Copy \"API Key\" from the settings of " +
+                        "AB Download Manager on the PC and put it in \"PC API key\" here."
+
+                else -> "Something answered at $address but it is not AB Download Manager with PC sync " +
+                        "(${e.code?.let { "HTTP $it" } ?: "unexpected answer"}). Check the address and the port."
+            }
+
+            // it answered something that is not ours (this is an IllegalArgumentException too)
+            is SerializationException -> describeError(PcResponseException(null))
+
+            is IllegalArgumentException -> "\"$address\" is not a valid address. " +
+                    "Use the IP of the PC, like 192.168.1.10:$DEFAULT_PORT."
+
+            else -> listOf(
+                "Can't reach the PC at $address (${e.message ?: e.javaClass.simpleName}). Check that:",
+                "1. The phone and the PC are in the same network",
+                "2. The address is the IP of the PC",
+                "3. AB Download Manager is running on the PC, " +
+                        "with \"Browser Integration\" and \"Use API Key\" enabled in its settings",
+                "4. Windows Firewall on the PC allows incoming connections to port $DEFAULT_PORT",
+            ).joinToString(System.lineSeparator())
         }
     }
 
@@ -142,10 +207,6 @@ class PcDownloadsWatcher(
     private val _downloads = MutableStateFlow<List<PcDownload>>(emptyList())
     val downloads = _downloads.asStateFlow()
 
-    // null means the last poll was successful
-    private val _lastError = MutableStateFlow<String?>(null)
-    val lastError = _lastError.asStateFlow()
-
     private var booted = false
     fun boot() {
         synchronized(this) {
@@ -165,7 +226,7 @@ class PcDownloadsWatcher(
                 }
                 while (true) {
                     val result = runCatching { pcRemote.listDownloads() }
-                    _lastError.value = result.exceptionOrNull()?.let { it.message ?: it.toString() }
+                    result.exceptionOrNull()?.let { if (it is CancellationException) throw it }
                     // an unreachable PC has nothing to show
                     val list = result.getOrDefault(emptyList())
                     onNewList(list)

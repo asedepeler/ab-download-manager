@@ -42,7 +42,7 @@ object AndroidSettings {
     ): StringConfigurable {
         return StringConfigurable(
             title = "PC address".asStringSource(),
-            description = "Address of AB Download Manager on your PC in the same network, like 192.168.1.10:15151. Downloads of that PC are shown in notifications. Leave it empty to disable.".asStringSource(),
+            description = "Address of AB Download Manager on your PC in the same network, like 192.168.1.10:15151 (see the IPv4 address in the network settings of the PC). Downloads of that PC are shown in notifications. Leave it empty to disable.".asStringSource(),
             backedBy = appSettingsStorage.pcAddress,
             describe = {
                 it.ifBlank { Res.string.disabled.asStringSource().getString() }.asStringSource()
@@ -55,7 +55,7 @@ object AndroidSettings {
     ): StringConfigurable {
         return StringConfigurable(
             title = "PC API key".asStringSource(),
-            description = "The API auth key from the settings of AB Download Manager on your PC.".asStringSource(),
+            description = "On the PC enable \"Use API Key\" in the settings of AB Download Manager, then copy its \"API Key\" here.".asStringSource(),
             backedBy = appSettingsStorage.pcApiKey,
             describe = { "".asStringSource() },
         )
@@ -63,8 +63,8 @@ object AndroidSettings {
 
     fun pcDownloads(context: Context): NavigatableConfigurable {
         return NavigatableConfigurable(
-            title = "PC downloads".asStringSource(),
-            description = "Show the downloads of your PC".asStringSource(),
+            title = "Test PC connection".asStringSource(),
+            description = "Check if this phone is connected to your PC and show the downloads of the PC".asStringSource(),
             onRequestNavigate = {
                 context.startActivity(
                     Intent(context, PcDownloadsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

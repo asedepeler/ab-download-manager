@@ -20,6 +20,7 @@ import com.abdownloadmanager.shared.pages.adddownload.ImportOptions
 import com.abdownloadmanager.shared.util.extractors.linkextractor.DefaultDownloadCredentialsExtractor
 import ir.amirab.downloader.downloaditem.IDownloadCredentials
 import ir.amirab.downloader.downloaditem.http.HttpDownloadCredentials
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -107,10 +108,26 @@ class AddDownloadActivity : ABDMActivity() {
 
     private fun sendToPc(credentials: List<IDownloadCredentials>) {
         scope.launch {
-            runCatching { pcRemote.sendDownloads(credentials) }
-                .onSuccess { toast("Sent to PC") }
-                .onFailure { toast("Can't send to PC: ${it.message}") }
-            finish()
+            val error = try {
+                pcRemote.sendDownloads(credentials)
+                null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                pcRemote.describeError(e)
+            }
+            if (error == null) {
+                toast("Sent to PC")
+                finish()
+                return@launch
+            }
+            AlertDialog.Builder(this@AddDownloadActivity)
+                .setTitle("Can't send to PC")
+                .setMessage(error)
+                .setPositiveButton("Download on this phone") { _, _ -> openAddDownloadPage(credentials) }
+                .setNegativeButton("Cancel") { _, _ -> finish() }
+                .setOnCancelListener { finish() }
+                .show()
         }
     }
 
