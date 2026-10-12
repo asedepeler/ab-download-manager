@@ -1,6 +1,7 @@
 package com.abdownloadmanager.integration
 
 import com.abdownloadmanager.integration.model.AddDownloadsFromIntegration
+import com.abdownloadmanager.integration.model.ApiDownloadModel
 import com.abdownloadmanager.integration.model.ApiQueueModel
 import com.abdownloadmanager.integration.model.NewDownloadTask
 
@@ -13,6 +14,12 @@ interface IntegrationHandler{
 
 
     fun listQueues(): List<ApiQueueModel>
+
+    /**
+     * unfinished downloads plus the recently finished ones
+     * meant to be polled by a remote client to show progress
+     */
+    fun listDownloads(): List<ApiDownloadModel>
 
     /**
      * manually add download

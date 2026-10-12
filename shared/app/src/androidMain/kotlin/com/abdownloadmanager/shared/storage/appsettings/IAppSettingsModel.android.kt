@@ -8,6 +8,7 @@ import io.github.amir1376.schemakt.schema.composite.TypeSafeObjectSchema
 import io.github.amir1376.schemakt.schema.composite.typeSafeObject
 import io.github.amir1376.schemakt.schema.modifier.catch
 import io.github.amir1376.schemakt.schema.primitive.boolean
+import io.github.amir1376.schemakt.schema.primitive.string
 import ir.amirab.util.config.datastore.asSettingsSchema
 import kotlinx.serialization.Serializable
 import kotlin.math.min
@@ -55,6 +56,8 @@ data class AppSettingsModel(
     override val useCategoryByDefault: Boolean,
     override val userAgent: String,
     val browserIconInLauncher: Boolean,
+    val pcAddress: String,
+    val pcApiKey: String,
 ) : IAppSettingsModel {
     companion object {
     }
@@ -66,6 +69,8 @@ private val AndroidSettingsSchema = S.typeSafeObject(
 
         prop(AppSettingsModel::browserIconInLauncher) bind S.boolean()
             .catch(PlatformDefaultSettings::browserIconInLauncher)
+        prop(AppSettingsModel::pcAddress) bind S.string().catch(PlatformDefaultSettings::pcAddress)
+        prop(AppSettingsModel::pcApiKey) bind S.string().catch(PlatformDefaultSettings::pcApiKey)
     },
     factory = {
         PlatformAppSettingsModel(
@@ -109,6 +114,8 @@ private val AndroidSettingsSchema = S.typeSafeObject(
             userAgent = it[AppSettingsModel::userAgent],
 
             browserIconInLauncher = it[AppSettingsModel::browserIconInLauncher],
+            pcAddress = it[AppSettingsModel::pcAddress],
+            pcApiKey = it[AppSettingsModel::pcApiKey],
         )
     }
 ).asSettingsSchema()

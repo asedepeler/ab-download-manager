@@ -46,6 +46,14 @@ sealed interface KeepAliveServiceReason {
         }
     }
 
+    data object WatchingPc : KeepAliveServiceReason {
+        override fun getKeyChanges() = Unit
+
+        override fun getReasonString(): String {
+            return "Watching PC downloads"
+        }
+    }
+
     data object AppIsInForeground : KeepAliveServiceReason {
         override fun getKeyChanges() = Unit
 

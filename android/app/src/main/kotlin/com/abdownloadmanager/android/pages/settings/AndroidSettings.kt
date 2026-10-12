@@ -1,12 +1,16 @@
 package com.abdownloadmanager.android.pages.settings
 
+import android.content.Context
+import android.content.Intent
 import com.abdownloadmanager.android.pages.onboarding.permissions.ABDMPermissions
+import com.abdownloadmanager.android.pages.remote.PcDownloadsActivity
 import com.abdownloadmanager.android.storage.AppSettingsStorage
 import com.abdownloadmanager.android.ui.configurable.android.item.PermissionConfigurable
 import com.abdownloadmanager.android.util.pagemanager.PermissionsPageManager
 import com.abdownloadmanager.resources.Res
 import com.abdownloadmanager.shared.ui.configurable.item.BooleanConfigurable
 import com.abdownloadmanager.shared.ui.configurable.item.NavigatableConfigurable
+import com.abdownloadmanager.shared.ui.configurable.item.StringConfigurable
 import ir.amirab.util.compose.asStringSource
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -30,6 +34,42 @@ object AndroidSettings {
             title = permission.title,
             description = permission.description,
             backedBy = MutableStateFlow(permission),
+        )
+    }
+
+    fun pcAddress(
+        appSettingsStorage: AppSettingsStorage
+    ): StringConfigurable {
+        return StringConfigurable(
+            title = "PC address".asStringSource(),
+            description = "Address of AB Download Manager on your PC in the same network, like 192.168.1.10:15151. Downloads of that PC are shown in notifications. Leave it empty to disable.".asStringSource(),
+            backedBy = appSettingsStorage.pcAddress,
+            describe = {
+                it.ifBlank { Res.string.disabled.asStringSource().getString() }.asStringSource()
+            },
+        )
+    }
+
+    fun pcApiKey(
+        appSettingsStorage: AppSettingsStorage
+    ): StringConfigurable {
+        return StringConfigurable(
+            title = "PC API key".asStringSource(),
+            description = "The API auth key from the settings of AB Download Manager on your PC.".asStringSource(),
+            backedBy = appSettingsStorage.pcApiKey,
+            describe = { "".asStringSource() },
+        )
+    }
+
+    fun pcDownloads(context: Context): NavigatableConfigurable {
+        return NavigatableConfigurable(
+            title = "PC downloads".asStringSource(),
+            description = "Show the downloads of your PC".asStringSource(),
+            onRequestNavigate = {
+                context.startActivity(
+                    Intent(context, PcDownloadsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            },
         )
     }
 

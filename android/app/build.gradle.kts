@@ -54,6 +54,7 @@ dependencies {
     implementation(libs.aboutLibraries.core)
     implementation(project(":shared:app"))
     ksp(libs.arrow.opticKsp)
+    testImplementation(kotlin("test"))
 }
 
 aboutLibraries {

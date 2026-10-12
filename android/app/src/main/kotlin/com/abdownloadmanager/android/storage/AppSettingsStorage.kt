@@ -87,4 +87,6 @@ class AppSettingsStorage(
     override val userAgent = from(AppSettingsModel.userAgent)
 
     val browserIconInLauncher = from(AppSettingsModel.browserIconInLauncher)
+    val pcAddress = from(AppSettingsModel.pcAddress)
+    val pcApiKey = from(AppSettingsModel.pcApiKey)
 }

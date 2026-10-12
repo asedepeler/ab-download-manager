@@ -14,6 +14,8 @@ import com.abdownloadmanager.android.pages.onboarding.permissions.PermissionMana
 import com.abdownloadmanager.android.service.DownloadSystemService
 import com.abdownloadmanager.android.service.KeepAliveServiceReason
 import com.abdownloadmanager.android.storage.AppSettingsStorage
+import com.abdownloadmanager.android.util.remote.PcDownloadsWatcher
+import com.abdownloadmanager.android.util.remote.PcRemote
 import com.abdownloadmanager.resources.Res
 import com.abdownloadmanager.shared.ApplicationBackgroundTracker
 import com.abdownloadmanager.shared.pagemanager.NotificationSender
@@ -52,6 +54,8 @@ class ABDMAppManager(
     val notificationManager: NotificationManager,
     val serviceNotificationManager: ABDMServiceNotificationManager,
     private val appSettingsStorage: AppSettingsStorage,
+    private val pcRemote: PcRemote,
+    private val pcDownloadsWatcher: PcDownloadsWatcher,
 ) : KoinComponent, NotificationSender {
     private var booted = guardedEntry()
     private var downloadSystemBooted = suspendGuardedEntry()
@@ -83,6 +87,7 @@ class ABDMAppManager(
             keepAwakeManager.boot()
             registerReceivers()
             registerDownloadEventNotifications()
+            pcDownloadsWatcher.boot()
         }
     }
 
@@ -399,7 +404,8 @@ class ABDMAppManager(
         downloadSystem.queueManager.activeQueuesFlow(),
         downloadSystem.queueManager.queueModelsFlow(),
         ApplicationBackgroundTracker.isInBackgroundFlow,
-    ) { activeDownloads, activeQueues, queueModels, isInBackground ->
+        pcRemote.isConfiguredFlow,
+    ) { activeDownloads, activeQueues, queueModels, isInBackground, isPcConfigured ->
         if (activeQueues.isNotEmpty()) {
             return@combine KeepAliveServiceReason.ActiveQueue(activeQueues.map { it.getQueueModel() })
         }
@@ -409,6 +415,9 @@ class ABDMAppManager(
         val scheduledTimeQueue = queueModels.filter { it.scheduledTimes.enabledStartTime }
         if (scheduledTimeQueue.isNotEmpty()) {
             return@combine KeepAliveServiceReason.ScheduledQueues(scheduledTimeQueue)
+        }
+        if (isPcConfigured) {
+            return@combine KeepAliveServiceReason.WatchingPc
         }
         if (!isInBackground) {
             return@combine KeepAliveServiceReason.AppIsInForeground

@@ -14,6 +14,10 @@ import ir.amirab.downloader.NewDownloadItemProps
 import ir.amirab.downloader.downloaditem.EmptyContext
 import ir.amirab.downloader.downloaditem.hls.HLSDownloadCredentials
 import ir.amirab.downloader.downloaditem.http.HttpDownloadCredentials
+import ir.amirab.downloader.downloaditem.DownloadJobStatus
+import ir.amirab.downloader.monitor.CompletedDownloadItemState
+import ir.amirab.downloader.monitor.IDownloadMonitor
+import ir.amirab.downloader.monitor.ProcessingDownloadItemState
 import ir.amirab.downloader.queue.QueueManager
 import ir.amirab.downloader.utils.OnDuplicateStrategy
 import org.koin.core.component.KoinComponent
@@ -24,6 +28,7 @@ class IntegrationHandlerImp : IntegrationHandler, KoinComponent {
     val downloadSystem by inject<DownloadSystem>()
     val queueManager by inject<QueueManager>()
     val appSettings by inject<AppRepository>()
+    private val downloadMonitor by inject<IDownloadMonitor>()
     private val downloaderInUiRegistry by inject<DownloaderInUiRegistry>()
 
     override suspend fun addDownloadByGui(
@@ -49,6 +54,35 @@ class IntegrationHandlerImp : IntegrationHandler, KoinComponent {
         return queueManager.getAll().map { downloadQueue ->
             val queueModel = downloadQueue.getQueueModel()
             ApiQueueModel(id = queueModel.id, name = queueModel.name)
+        }
+    }
+
+    override fun listDownloads(): List<ApiDownloadModel> {
+        val recentlyFinished = System.currentTimeMillis() - 24 * 60 * 60 * 1000
+        return downloadMonitor.downloadListFlow.value.mapNotNull {
+            when (it) {
+                is ProcessingDownloadItemState -> ApiDownloadModel(
+                    id = it.id,
+                    name = it.name,
+                    status = if (it.status is DownloadJobStatus.IsActive) {
+                        ApiDownloadModel.STATUS_DOWNLOADING
+                    } else {
+                        ApiDownloadModel.STATUS_PAUSED
+                    },
+                    percent = it.percent,
+                    speed = it.speed,
+                    contentLength = it.contentLength,
+                )
+
+                is CompletedDownloadItemState -> ApiDownloadModel(
+                    id = it.id,
+                    name = it.name,
+                    status = ApiDownloadModel.STATUS_FINISHED,
+                    percent = 100,
+                    speed = 0,
+                    contentLength = it.contentLength,
+                ).takeIf { _ -> it.completeTime >= recentlyFinished }
+            }
         }
     }
 

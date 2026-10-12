@@ -12,7 +12,8 @@ jobs:
   create-packages:
     strategy:
       matrix:
-        os: [ "ubuntu-latest", "ubuntu-24.04-arm", "windows-2022", "windows-11-arm", "macos-15-intel", "macos-15" ]
+        # this fork only ships android (built on ubuntu) and windows
+        os: [ "ubuntu-latest", "windows-2022" ]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -51,21 +52,33 @@ jobs:
           echo "ABDM_KEYSTORE_KEY_ALIAS=${{ secrets.ABDM_KEYSTORE_KEY_ALIAS }}" >> $GITHUB_ENV
           echo "ABDM_KEYSTORE_KEY_PASSWORD=${{ secrets.ABDM_KEYSTORE_KEY_PASSWORD }}" >> $GITHUB_ENV
 
-      # Steps specific to macOS (to create DMG for macOS)
-      - name: Install create-dmg (for macOS)
-        if: startsWith(matrix.os, 'macos-')
+      # without the keystore secrets the apk is signed by a new key in each build
+      # so it can't be installed over the previous one
+      - name: Use a temporary keystore when there is no keystore secret
+        if: matrix.os == 'ubuntu-latest' && env.ABDM_KEYSTORE_FILE == ''
         run: |
-          brew install create-dmg
+          keytool -genkeypair -keystore "$RUNNER_TEMP/ci.jks" -storepass android -keypass android -alias ci -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=CI"
+          echo "ABDM_KEYSTORE_FILE=file:$RUNNER_TEMP/ci.jks" >> $GITHUB_ENV
+          echo "ABDM_KEYSTORE_FILE_PASSWORD=android" >> $GITHUB_ENV
+          echo "ABDM_KEYSTORE_KEY_ALIAS=ci" >> $GITHUB_ENV
+          echo "ABDM_KEYSTORE_KEY_PASSWORD=android" >> $GITHUB_ENV
 
       - name: Gradle
         run: |
           ./gradlew
         shell: "bash"
 
-      - name: Build package for current OS using gradle
+      - name: Build windows package
+        if: matrix.os != 'ubuntu-latest'
         shell: bash
         run: |
           ./gradlew createReleaseFolderForCi
+
+      - name: Build android package
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          ./gradlew android:app:createBinariesForCi createChangeNoteForCi
 
       - name: Release Gradle to unlock cache files
         shell: bash
@@ -78,7 +91,15 @@ jobs:
           path: ./build/ci-release
           name: app-${{ matrix.os }}
 
+      - name: Unit tests
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          ./gradlew android:app:testReleaseUnitTest
+
   release:
+    # manual runs only produce the artifacts
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: "ubuntu-latest"
     needs: [ "create-packages" ]
     steps:

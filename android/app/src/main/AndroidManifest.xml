@@ -79,6 +79,19 @@
                 android:name=".pages.add.AddDownloadActivity"
                 android:exported="true"
                 android:theme="@style/Theme.ABDownloadManager.Transparent"
+        >
+            <!--        "Share" a link from another browser-->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="text/plain"/>
+            </intent-filter>
+        </activity>
+
+        <activity
+                android:name=".pages.remote.PcDownloadsActivity"
+                android:exported="false"
+                android:theme="@style/Theme.ABDownloadManager"
         />
 
         <activity

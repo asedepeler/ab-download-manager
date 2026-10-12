@@ -59,6 +59,36 @@ paths:
                     name:
                       type: string
                       description: The name of the queue
+  /downloads:
+    get:
+      summary: List downloads
+      description: Unfinished downloads plus the ones finished in the last 24 hours. Meant to be polled to show progress.
+      responses:
+        "200":
+          description: List of downloads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    name:
+                      type: string
+                    status:
+                      type: string
+                      enum: [ downloading, paused, finished ]
+                    percent:
+                      type: integer
+                      nullable: true
+                      description: 0..100, null when the size is unknown
+                    speed:
+                      type: integer
+                      description: Bytes per second
+                    contentLength:
+                      type: integer
   /start-headless-download:
     post:
       summary: Add a new download task

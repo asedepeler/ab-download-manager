@@ -1,6 +1,7 @@
 package com.abdownloadmanager.integration
 
 import com.abdownloadmanager.integration.model.AddDownloadsFromIntegration
+import com.abdownloadmanager.integration.model.ApiDownloadModel
 import com.abdownloadmanager.integration.model.ApiQueueModel
 import com.abdownloadmanager.integration.model.NewDownloadTask
 import io.ktor.server.application.Application
@@ -61,6 +62,10 @@ internal fun Application.setupRouting(
                 val queues = integrationHandler.listQueues()
                 val jsonResponse = json.encodeToString(ListSerializer(ApiQueueModel.serializer()), queues)
                 call.respondText(jsonResponse)
+            }
+            get("/downloads") {
+                val downloads = integrationHandler.listDownloads()
+                call.respondText(json.encodeToString(ListSerializer(ApiDownloadModel.serializer()), downloads))
             }
             post("/start-headless-download") {
                 val itemsToAdd = kotlin.runCatching {

@@ -16,6 +16,7 @@ import ir.amirab.util.flow.mapStateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.koin.core.component.KoinComponent
+import org.koin.core.component.get
 import org.koin.core.component.inject
 import kotlin.getValue
 
@@ -138,6 +139,14 @@ class AndroidSettingsComponent(
                 nestedConfigurable = listOf(
                     AndroidSettings.permissionSettings(permissionsPageManager),
                     AndroidSettings.ignoreBatteryOptimizations(),
+                )
+            ),
+
+            ConfigurableGroup(
+                nestedConfigurable = listOf(
+                    AndroidSettings.pcAddress(appSettings),
+                    AndroidSettings.pcApiKey(appSettings),
+                    AndroidSettings.pcDownloads(get()),
                 )
             ),
 
