@@ -61,6 +61,19 @@ object AndroidSettings {
         )
     }
 
+    fun cookieSites(
+        appSettingsStorage: AppSettingsStorage
+    ): StringConfigurable {
+        return StringConfigurable(
+            title = "Send cookies for websites".asStringSource(),
+            description = "Cookies are only sent with the downloads of these websites and their subdomains. Separate them with a space, like: gofile.io a.com b.com".asStringSource(),
+            backedBy = appSettingsStorage.cookieSites,
+            describe = {
+                it.ifBlank { Res.string.disabled.asStringSource().getString() }.asStringSource()
+            },
+        )
+    }
+
     fun pcDownloads(context: Context): NavigatableConfigurable {
         return NavigatableConfigurable(
             title = "Test PC connection".asStringSource(),

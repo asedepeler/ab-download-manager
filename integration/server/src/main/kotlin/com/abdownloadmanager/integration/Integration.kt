@@ -84,7 +84,7 @@ class Integration(
             factory = CIO,
             port = settings.port,
             // reachable from the LAN (e.g. the android app) only when requests must carry the api key
-            host = if (settings.apiKey != null) "0.0.0.0" else "127.0.0.1",
+            host = if (settings.allowLan && settings.apiKey != null) "0.0.0.0" else "127.0.0.1",
         ) {
             setupRouting(json, integrationHandler, settings)
         }

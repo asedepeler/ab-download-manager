@@ -89,4 +89,5 @@ class AppSettingsStorage(
     val browserIconInLauncher = from(AppSettingsModel.browserIconInLauncher)
     val pcAddress = from(AppSettingsModel.pcAddress)
     val pcApiKey = from(AppSettingsModel.pcApiKey)
+    val cookieSites = from(AppSettingsModel.cookieSites)
 }

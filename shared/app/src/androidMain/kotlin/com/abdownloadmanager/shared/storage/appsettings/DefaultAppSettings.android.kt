@@ -6,4 +6,5 @@ actual object PlatformDefaultSettings : DefaultAppSettings() {
     val browserIconInLauncher: Boolean get() = false
     val pcAddress: String get() = ""
     val pcApiKey: String get() = ""
+    val cookieSites: String get() = "gofile.io"
 }

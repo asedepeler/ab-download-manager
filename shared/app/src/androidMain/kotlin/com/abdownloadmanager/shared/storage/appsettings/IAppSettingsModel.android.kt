@@ -58,6 +58,7 @@ data class AppSettingsModel(
     val browserIconInLauncher: Boolean,
     val pcAddress: String,
     val pcApiKey: String,
+    val cookieSites: String,
 ) : IAppSettingsModel {
     companion object {
     }
@@ -71,6 +72,7 @@ private val AndroidSettingsSchema = S.typeSafeObject(
             .catch(PlatformDefaultSettings::browserIconInLauncher)
         prop(AppSettingsModel::pcAddress) bind S.string().catch(PlatformDefaultSettings::pcAddress)
         prop(AppSettingsModel::pcApiKey) bind S.string().catch(PlatformDefaultSettings::pcApiKey)
+        prop(AppSettingsModel::cookieSites) bind S.string().catch(PlatformDefaultSettings::cookieSites)
     },
     factory = {
         PlatformAppSettingsModel(
@@ -116,6 +118,7 @@ private val AndroidSettingsSchema = S.typeSafeObject(
             browserIconInLauncher = it[AppSettingsModel::browserIconInLauncher],
             pcAddress = it[AppSettingsModel::pcAddress],
             pcApiKey = it[AppSettingsModel::pcApiKey],
+            cookieSites = it[AppSettingsModel::cookieSites],
         )
     }
 ).asSettingsSchema()

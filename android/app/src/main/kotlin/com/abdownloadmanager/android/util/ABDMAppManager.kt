@@ -16,12 +16,16 @@ import com.abdownloadmanager.android.service.KeepAliveServiceReason
 import com.abdownloadmanager.android.storage.AppSettingsStorage
 import com.abdownloadmanager.android.util.remote.PcDownloadsWatcher
 import com.abdownloadmanager.android.util.remote.PcRemote
+import com.abdownloadmanager.integration.Integration
+import com.abdownloadmanager.integration.IntegrationResult
+import com.abdownloadmanager.integration.IntegrationSettings
 import com.abdownloadmanager.resources.Res
 import com.abdownloadmanager.shared.ApplicationBackgroundTracker
 import com.abdownloadmanager.shared.pagemanager.NotificationSender
 import com.abdownloadmanager.shared.ui.widget.MessageDialogType
 import com.abdownloadmanager.shared.ui.widget.NotificationManager
 import com.abdownloadmanager.shared.ui.widget.NotificationType
+import com.abdownloadmanager.shared.util.ApiKeyUtil
 import com.abdownloadmanager.shared.util.DownloadSystem
 import com.abdownloadmanager.shared.util.category.CategorySelectionMode
 import com.abdownloadmanager.shared.util.keepawake.KeepAwakeManager
@@ -56,6 +60,7 @@ class ABDMAppManager(
     private val appSettingsStorage: AppSettingsStorage,
     private val pcRemote: PcRemote,
     private val pcDownloadsWatcher: PcDownloadsWatcher,
+    private val integration: Integration,
 ) : KoinComponent, NotificationSender {
     private var booted = guardedEntry()
     private var downloadSystemBooted = suspendGuardedEntry()
@@ -88,7 +93,53 @@ class ABDMAppManager(
             registerReceivers()
             registerDownloadEventNotifications()
             pcDownloadsWatcher.boot()
+            bootIntegration()
         }
+    }
+
+    /**
+     * the browser extension of a browser on this device sends its downloads to this server
+     * it only listens for this device
+     */
+    private fun bootIntegration() {
+        integration.boot()
+        combine(
+            appSettingsStorage.apiEnabled,
+            appSettingsStorage.apiPort,
+            appSettingsStorage.apiAuthEnabled,
+            appSettingsStorage.apiAuthKey,
+        ) { apiEnabled, apiPort, apiAuthEnabled, apiAuthKey ->
+            if (!apiEnabled) {
+                return@combine null
+            }
+            IntegrationSettings(
+                port = apiPort,
+                apiKey = apiAuthKey
+                    .takeIf { apiAuthEnabled }
+                    .takeIf { ApiKeyUtil.isValidKey(apiAuthKey) },
+                allowLan = false,
+            )
+        }
+            .debounce(500)
+            .onEach {
+                if (it != null) {
+                    integration.enable(it)
+                } else {
+                    integration.disable()
+                }
+            }.launchIn(scope)
+        integration.integrationStatus.onEach { result ->
+            //if there is an error in connection disable integration
+            if (result is IntegrationResult.Fail) {
+                appSettingsStorage.apiEnabled.update { false }
+                sendNotification(
+                    tag = result,
+                    title = "Browser integration can't start".asStringSource(),
+                    description = (result.throwable.message ?: result.throwable.toString()).asStringSource(),
+                    type = NotificationType.Error,
+                )
+            }
+        }.launchIn(scope)
     }
 
     private var shouldShowToastsNotifications = MutableStateFlow(true)

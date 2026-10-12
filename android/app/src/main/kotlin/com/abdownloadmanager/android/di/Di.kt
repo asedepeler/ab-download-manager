@@ -20,7 +20,10 @@ import com.abdownloadmanager.android.storage.BrowserBookmarksStorage
 import com.abdownloadmanager.android.storage.HomePageStorage
 import com.abdownloadmanager.android.storage.OnBoardingData
 import com.abdownloadmanager.android.util.ABDMAppManager
+import com.abdownloadmanager.android.integration.AndroidIntegrationHandler
 import com.abdownloadmanager.android.util.ABDMServiceNotificationManager
+import com.abdownloadmanager.integration.Integration
+import com.abdownloadmanager.integration.IntegrationHandler
 import com.abdownloadmanager.android.util.remote.PcDownloadsWatcher
 import com.abdownloadmanager.android.util.remote.PcRemote
 import com.abdownloadmanager.android.util.AndroidDefinedPaths
@@ -674,13 +677,19 @@ fun getAppModule(context: ABDMApp) = module {
         bind<Context>()
     }
     single {
-        ABDMAppManager(get(), get(), get(), get(), get(), get(), get(), get(), get(), get())
+        ABDMAppManager(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get())
     }
     single {
         ABDMServiceNotificationManager(get(), get(), get(), get(), get(), get())
     }
     single {
         PcRemote(get(), get())
+    }
+    single<IntegrationHandler> {
+        AndroidIntegrationHandler()
+    }
+    single {
+        Integration(get(), get(), get(), false)
     }
     single {
         PcDownloadsWatcher(get(), get(), get(), get())

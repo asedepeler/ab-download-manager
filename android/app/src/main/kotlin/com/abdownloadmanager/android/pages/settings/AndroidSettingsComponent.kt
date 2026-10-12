@@ -150,14 +150,16 @@ class AndroidSettingsComponent(
                 )
             ),
 
-            // browser integration
-            // disabled for now
-//            ConfigurableGroup(
-//                nestedConfigurable = listOf(
-//                    CommonSettings.browserIntegrationEnabled(appRepository),
-//                    CommonSettings.browserIntegrationPort(appRepository)
-//                )
-//            )
+            // the browser extension of a browser on this device (like Kiwi) sends its downloads and its cookies to us
+            ConfigurableGroup(
+                nestedConfigurable = listOf(
+                    CommonSettings.browserIntegrationEnabled(appRepository),
+                    CommonSettings.browserIntegrationPort(appRepository),
+                    CommonSettings.apiAuthEnabled(appRepository),
+                    CommonSettings.apiAuthKey(appRepository),
+                    AndroidSettings.cookieSites(appSettings),
+                )
+            ),
         )
     )
 

@@ -53,7 +53,8 @@ class AppRepository(
                 port = apiPort,
                 apiKey = apiAuthKey
                     .takeIf { apiAuthEnabled }
-                    .takeIf { ApiKeyUtil.isValidKey(apiAuthKey) }
+                    .takeIf { ApiKeyUtil.isValidKey(apiAuthKey) },
+                allowLan = true,
             )
         }
             .debounce(500.milliseconds)

@@ -10,7 +10,9 @@ import com.abdownloadmanager.android.pages.add.multiple.AddMultiDownloadActivity
 import com.abdownloadmanager.android.pages.add.single.AddSingleDownloadActivity
 import com.abdownloadmanager.android.pages.onboarding.permissions.PermissionManager
 import com.abdownloadmanager.android.ui.MainActivity
+import com.abdownloadmanager.android.storage.AppSettingsStorage
 import com.abdownloadmanager.android.util.BrowserHeaders
+import com.abdownloadmanager.android.util.CookieSites
 import com.abdownloadmanager.android.util.activity.ABDMActivity
 import com.abdownloadmanager.android.util.gofile.GofileResolver
 import com.abdownloadmanager.android.util.gofile.gofilePageOf
@@ -34,6 +36,7 @@ class AddDownloadActivity : ABDMActivity() {
     val json: Json by inject()
     val permissionManager: PermissionManager by inject()
     private val pcRemote: PcRemote by inject()
+    private val settings: AppSettingsStorage by inject()
     private val okHttpClient: OkHttpClient by inject()
     private val scope = MainScope()
     private fun createDownloaderInUiProps(
@@ -90,6 +93,9 @@ class AddDownloadActivity : ABDMActivity() {
         if (credentials !is HttpDownloadCredentials || credentials.headers != null) {
             return credentials
         }
+        if (!CookieSites.allows(settings.cookieSites.value, credentials.link)) {
+            return credentials
+        }
         val headers = BrowserHeaders.of(this, credentials.link) ?: return credentials
         return credentials.copy(headers = headers)
     }
@@ -108,6 +114,13 @@ class AddDownloadActivity : ABDMActivity() {
         var unavailableCount = 0
         val resolved = credentials.flatMap {
             val page = gofilePageOf(it.link) ?: return@flatMap listOf(withBrowserCookies(it))
+            if (!CookieSites.allows(settings.cookieSites.value, page)) {
+                showErrorAndFinish(
+                    "gofile only serves its files with its cookies. " +
+                            "Add gofile.io to \"Send cookies for websites\" in the settings."
+                )
+                return null
+            }
             if (isGofileFileLink(it.link)) {
                 val fileLink = it.link.trim()
                 val headers = GofileResolver.headersOfFile(this, fileLink, page, okHttpClient)
